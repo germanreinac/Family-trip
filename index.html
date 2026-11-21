@@ -1,0 +1,693 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Family Trip</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Patrick+Hand&family=Permanent+Marker&display=swap">
+<style>
+/* Layout: one full-screen sheet of grid paper (the canvas); notes pinned in the corners like margin scribbles. */
+:root {
+  --paper: #eef0ee;
+  --grid: #c3ccd1;
+  --ink: #151515;
+  --shade: #151515;
+  --marigold: #f2a900;
+  --note: rgba(238, 240, 238, .86);
+  --display: "Permanent Marker", "Marker Felt", "Comic Sans MS", cursive;
+  --hand: "Patrick Hand", "Chalkboard SE", "Comic Sans MS", cursive;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #1b1d1f; --grid: #2c3237; --ink: #e9e9e3; --shade: #050505;
+    --marigold: #ffb81c; --note: rgba(27, 29, 31, .86); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #1b1d1f; --grid: #2c3237; --ink: #e9e9e3; --shade: #050505;
+  --marigold: #ffb81c; --note: rgba(27, 29, 31, .86); color-scheme: dark;
+}
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--paper); color: var(--ink);
+  font-family: var(--hand); font-size: 17px; line-height: 1.25;
+  overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none;
+}
+canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+.hud {
+  position: fixed; inset: 0; pointer-events: none;
+  padding-block: calc(env(safe-area-inset-top, 0px) + 12px) calc(env(safe-area-inset-bottom, 0px) + 12px);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
+}
+.note { background: var(--note); border-radius: 3px; padding: 6px 10px; }
+.list h2 { font-family: var(--display); font-weight: 400; font-size: 15px; margin: 0 0 2px; letter-spacing: .04em; }
+.list ul { list-style: none; margin: 0; padding: 0; }
+.list li { display: flex; align-items: center; gap: 7px; }
+.list li i {
+  width: 11px; height: 11px; border: 1.6px solid var(--ink); border-radius: 2px; flex: none;
+  display: inline-block; transform: rotate(-3deg);
+}
+.list li.got { text-decoration: line-through; text-decoration-thickness: 1.5px; }
+.list li.got i { background: var(--marigold); }
+.stats { text-align: right; font-variant-numeric: tabular-nums; }
+.stats button {
+  pointer-events: auto; font: inherit; color: inherit; background: none; border: 0; padding: 2px 0;
+  text-decoration: underline; cursor: pointer;
+}
+.sheet {
+  position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+  padding-block: 24px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.card {
+  background: var(--note); max-width: 340px; padding: 22px 26px 24px; text-align: center;
+  border: 2px solid var(--ink); border-radius: 4px; transform: rotate(-1.2deg);
+  box-shadow: 5px 6px 0 var(--shade);
+}
+.card h1 {
+  font-family: var(--display); font-weight: 400; font-size: 40px; line-height: 1; margin: 0 0 10px;
+  letter-spacing: .03em; text-wrap: balance;
+}
+.card p { margin: 0 0 10px; font-size: 18px; }
+.card .small { font-size: 15px; opacity: .8; }
+.card button {
+  font-family: var(--display); font-size: 20px; color: var(--ink); background: var(--marigold);
+  border: 2px solid var(--ink); border-radius: 4px; padding: 8px 22px; margin-top: 6px; cursor: pointer;
+  box-shadow: 3px 3px 0 var(--shade);
+}
+.card button:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--shade); }
+button:focus-visible { outline: 3px solid var(--marigold); outline-offset: 3px; }
+</style>
+</head>
+<body>
+
+<canvas id="c" aria-label="Family Trip game: an isometric graveyard drawn in ink on grid paper"></canvas>
+
+<div class="hud" id="hud" hidden>
+  <div class="note list">
+    <h2 id="famTitle">The family</h2>
+    <ul id="famList"></ul>
+  </div>
+  <div class="note stats">
+    <div id="time">0:00</div>
+    <div id="woken">0 neighbours woken</div>
+    <button id="mute" type="button">sound: on</button>
+  </div>
+</div>
+
+<div class="sheet" id="titleSheet">
+  <div class="card">
+    <h1>Family Trip</h1>
+    <p>Everyone is coming along this year. Drive through the graveyard and load up the family. Their names are on your list.</p>
+    <p class="small">Drag anywhere, or use the arrow keys, to steer. Take the corners wide so the trailers don't wake the neighbours.</p>
+    <button id="startBtn" type="button">Start the engine</button>
+  </div>
+</div>
+
+<div class="sheet" id="winSheet" hidden>
+  <div class="card">
+    <h1>Off they go!</h1>
+    <p id="winLine"></p>
+    <p class="small" id="winVerdict"></p>
+    <button id="nextBtn" type="button">Next family</button>
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp = (a, b, t) => a + (b - a) * t;
+const rnd = (a, b) => a + Math.random() * (b - a);
+const pick = arr => arr[Math.random() * arr.length | 0];
+const wrap = a => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; };
+
+/* ---------- projection ---------- */
+const A = .82, B = .47;
+const P = (x, y, z = 0) => [(x - y) * A, (x + y) * B - z];
+
+/* ---------- colours from the page tokens ---------- */
+const C = {};
+function readColors() {
+  const s = getComputedStyle(document.documentElement);
+  for (const k of ['paper', 'grid', 'ink', 'shade', 'marigold']) C[k] = s.getPropertyValue('--' + k).trim();
+}
+readColors();
+
+/* ---------- canvas ---------- */
+let VW = 0, VH = 0, DPR = 1, scale = 1;
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  VW = cv.clientWidth; VH = cv.clientHeight;
+  cv.width = Math.round(VW * DPR); cv.height = Math.round(VH * DPR);
+  scale = clamp(Math.min(VW, VH) / 420, .9, 2.1);
+}
+addEventListener('resize', resize); resize();
+
+/* ---------- wobbly ink ---------- */
+const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let jk = 0, boil = 0;
+const JIT = .9;
+const seed = n => { jk = (n * 131) | 0; };
+function jx() { const v = Math.sin((jk++) * 12.9898 + boil * 78.233) * 43758.5453; return (v - Math.floor(v) - .5) * JIT; }
+function trace(pts, close) {
+  ctx.beginPath();
+  for (let i = 0; i < pts.length; i++) {
+    const x = pts[i][0] + jx(), y = pts[i][1] + jx();
+    i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+  }
+  if (close) ctx.closePath();
+}
+function shape(pts, fill, lw) {
+  trace(pts, true);
+  if (fill === undefined) fill = C.paper;
+  if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+  if (lw !== 0) { ctx.lineWidth = lw || 1.6; ctx.strokeStyle = C.ink; ctx.stroke(); }
+}
+function line(pts, lw, col) { trace(pts, false); ctx.lineWidth = lw || 1.6; ctx.strokeStyle = col || C.ink; ctx.stroke(); }
+function dot(p, r, fill, lw) {
+  ctx.beginPath(); ctx.arc(p[0], p[1], r, 0, 7);
+  ctx.fillStyle = fill || C.ink; ctx.fill();
+  if (lw) { ctx.lineWidth = lw; ctx.strokeStyle = C.ink; ctx.stroke(); }
+}
+function hull(pts) {
+  const p = pts.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lo = [], up = [];
+  for (const q of p) { while (lo.length > 1 && cr(lo[lo.length - 2], lo[lo.length - 1], q) <= 0) lo.pop(); lo.push(q); }
+  for (let i = p.length - 1; i >= 0; i--) { const q = p[i]; while (up.length > 1 && cr(up[up.length - 2], up[up.length - 1], q) <= 0) up.pop(); up.push(q); }
+  lo.pop(); up.pop(); return lo.concat(up);
+}
+
+/* ---------- solid shapes ---------- */
+function corners(cx, cy, a, len, wid) {
+  const fx = Math.cos(a), fy = Math.sin(a), hl = len / 2, hw = wid / 2;
+  return [[1, 1], [1, -1], [-1, -1], [-1, 1]].map(([u, v]) => [cx + fx * hl * u - fy * hw * v, cy + fy * hl * u + fx * hw * v]);
+}
+function box(cx, cy, a, len, wid, z0, z1, fill) {
+  const fx = Math.cos(a), fy = Math.sin(a);
+  const c = corners(cx, cy, a, len, wid);
+  const ns = [[fx, fy], [fy, -fx], [-fx, -fy], [-fy, fx]];
+  for (let i = 0; i < 4; i++) if (ns[i][0] + ns[i][1] > .001) {
+    const p = c[i], q = c[(i + 1) % 4];
+    shape([P(p[0], p[1], z0), P(q[0], q[1], z0), P(q[0], q[1], z1), P(p[0], p[1], z1)], fill);
+  }
+  shape(c.map(p => P(p[0], p[1], z1)), fill);
+}
+function shadow(cx, cy, a, len, wid) {
+  shape(corners(cx, cy, a, len, wid).map(p => { const q = P(p[0], p[1], 0); return [q[0], q[1] + 2]; }), C.shade, 2.5);
+}
+
+/* ---------- headstones ---------- */
+const arc = (hw, base, n) => { const o = []; for (let i = 0; i <= n; i++) { const t = Math.PI * i / n; o.push([hw * Math.cos(t), base + hw * Math.sin(t)]); } return o; };
+const PROF = {
+  arch: [[-7, 0], [7, 0], ...arc(7, 13, 8)],
+  slab: [[-8, 0], [8, 0], [8, 15], [6, 18], [-6, 18], [-8, 15]],
+  gothic: [[-7, 0], [7, 0], [7, 11], [5.5, 17], [3, 21], [0, 24], [-3, 21], [-5.5, 17], [-7, 11]],
+  obelisk: [[-5, 0], [5, 0], [3.4, 23], [0, 28], [-3.4, 23]],
+  cross: [[-2.5, 0], [2.5, 0], [2.5, 14], [8, 14], [8, 19], [2.5, 19], [2.5, 26], [-2.5, 26], [-2.5, 19], [-8, 19], [-8, 14], [-2.5, 14]]
+};
+const KINDS = ['arch', 'arch', 'arch', 'slab', 'gothic', 'obelisk', 'cross'];
+function stone(cx, cy, z, a, kind, sd) {
+  seed(sd);
+  const fx = Math.cos(a), fy = Math.sin(a), t = 2.2, prof = PROF[kind];
+  const mk = g => prof.map(([u, h]) => P(cx + fx * t * g - fy * u, cy + fy * t * g + fx * u, z + h));
+  const sg = fx + fy > 0 ? 1 : -1, near = mk(sg), far = mk(-sg);
+  if (kind === 'cross') { shape(far); shape(near); return; }
+  shape(hull(near.concat(far)));
+  shape(near, null);
+  const e = (u, h) => P(cx + fx * t * sg - fy * u, cy + fy * t * sg + fx * u, z + h);
+  if (kind !== 'obelisk') { line([e(-3, 13), e(3, 13)], 1); line([e(-2, 10), e(2, 10)], 1); }
+  else line([e(-1.5, 12), e(1.5, 12)], 1);
+}
+
+/* ---------- the little dirt mound with a face ---------- */
+function face(x, y, mood) {
+  if (mood === 'sleep') {
+    line([[x - 4.5, y], [x - 2, y]], 1.3); line([[x + 2, y], [x + 4.5, y]], 1.3);
+    line([[x - 1, y + 3.2], [x + 1, y + 3.2]], 1.2);
+  } else if (mood === 'grumpy') {
+    dot([x - 3, y], 1.2); dot([x + 3, y], 1.2);
+    line([[x - 5.5, y - 4], [x - 1.5, y - 2.4]], 1.4); line([[x + 5.5, y - 4], [x + 1.5, y - 2.4]], 1.4);
+    line([[x - 2.2, y + 4.6], [x, y + 3.4], [x + 2.2, y + 4.6]], 1.3);
+  } else {
+    dot([x - 3, y], 1.2); dot([x + 3, y], 1.2);
+    line([[x - 2.2, y + 2.8], [x, y + 4.2], [x + 2.2, y + 2.8]], 1.3);
+  }
+}
+function mound(cx, cy, z, r, mood, sd) {
+  seed(sd);
+  const p = P(cx, cy, z), rx = r * 1.16, ry = r * .66, h = r * .95, pts = [];
+  for (let i = 0; i <= 8; i++) { const t = Math.PI * (1 - i / 8); pts.push([p[0] + rx * Math.cos(t), p[1] + ry * Math.sin(t)]); }
+  for (let i = 1; i < 10; i++) {
+    const t = Math.PI * i / 10;
+    pts.push([p[0] + rx * Math.cos(t), p[1] - h * Math.pow(Math.sin(t), .7) + Math.sin(t * 3 + sd) * .9]);
+  }
+  shape(pts);
+  face(p[0], p[1] - h * .28, mood);
+}
+function drawGrave(g, cx, cy, z, a, mood) {
+  const fx = Math.cos(a), fy = Math.sin(a);
+  const st = () => stone(cx - fx * 8, cy - fy * 8, z, a, g.kind, g.id * 7 + 1);
+  const mo = () => mound(cx + fx * 4, cy + fy * 4, z, 10, mood, g.id * 7 + 3);
+  if (fx + fy > 0) { st(); mo(); } else { mo(); st(); }
+}
+function flowers(g) {
+  seed(g.id * 7 + 5);
+  const fx = Math.cos(g.a), fy = Math.sin(g.a);
+  const bx = g.x - fx * 6 - fy * 13 * g.side, by = g.y - fy * 6 + fx * 13 * g.side;
+  for (let i = 0; i < 3; i++) {
+    const o = (i - 1) * 3.2, base = P(bx + o * fx, by + o * fy, 0), top = [base[0] + (i - 1) * 2.4, base[1] - 7 - (i % 2) * 3];
+    line([base, top], 1.1);
+    dot(top, 2.3, C.marigold, 1.1);
+  }
+}
+
+/* ---------- vehicles ---------- */
+function wheels(cx, cy, a, dl, dw) {
+  for (const c of corners(cx, cy, a, dl, dw)) dot(P(c[0], c[1], 4), 4.3, C.ink);
+}
+function drawTug(t) {
+  seed(9001);
+  const { x, y, a } = t, fx = Math.cos(a), fy = Math.sin(a), sx = -fy, sy = fx;
+  shadow(x, y, a, 38, 28);
+  wheels(x, y, a, 22, 25);
+  box(x, y, a, 34, 24, 4, 13);
+  const cx = x - fx * 1, cy = y - fy * 1;
+  box(cx, cy, a, 27, 21, 13, 31);
+  const quad = (nx, ny, tx, ty, d, u0, u1, z0, z1, ox, oy) => {
+    const q = (u, z) => P(ox + nx * d + tx * u, oy + ny * d + ty * u, z);
+    return [q(u0, z0), q(u1, z0), q(u1, z1), q(u0, z1)];
+  };
+  if (fx + fy > .05) {                      // windscreen + headlights
+    const w = quad(fx, fy, sx, sy, 13.5, -8, 8, 18, 28, cx, cy);
+    shape(w); line([[lerp(w[0][0], w[1][0], .3), lerp(w[0][1], w[1][1], .3)], [lerp(w[3][0], w[2][0], .7), lerp(w[3][1], w[2][1], .7)]], 1.1);
+    dot(P(x + fx * 17 + sx * 8, y + fy * 17 + sy * 8, 8.5), 2, C.marigold, 1.2);
+    dot(P(x + fx * 17 - sx * 8, y + fy * 17 - sy * 8, 8.5), 2, C.marigold, 1.2);
+  } else if (fx + fy < -.05) {
+    shape(quad(-fx, -fy, sx, sy, 13.5, -6, 6, 20, 27, cx, cy));
+  }
+  for (const g of [1, -1]) if ((sx + sy) * g > .05) shape(quad(sx * g, sy * g, fx, fy, 10.5, -9, 8, 18, 28, cx, cy));
+}
+function drawTrailer(t) {
+  seed(9100 + t.i * 13);
+  shadow(t.x, t.y, t.a, 34, 30);
+  wheels(t.x, t.y, t.a, 18, 26);
+  box(t.x, t.y, t.a, 30, 26, 5, 8);
+  box(t.x, t.y, t.a, 28, 24, 8, 10.5);
+  if (t.load) drawGrave(t.load, t.x, t.y, 10.5, t.a, 'happy');
+}
+function drawBar(p, q, sd) {
+  seed(sd);
+  const a = P(p[0], p[1], 6), b = P(q[0], q[1], 6);
+  line([a, b], 5.5); line([a, b], 2.2, C.paper); dot(a, 2.6, C.paper, 1.4);
+}
+
+/* ---------- scenery ---------- */
+function makeTree() {
+  const segs = [];
+  (function grow(x, h, ang, len, w, d) {
+    const x1 = x + Math.sin(ang) * len, h1 = h + Math.cos(ang) * len;
+    segs.push([x, h, x1, h1, w]);
+    if (d < 4) { const n = d < 1 ? 3 : 2; for (let i = 0; i < n; i++) grow(x1, h1, ang + rnd(-.9, .9), len * rnd(.55, .78), w * .62, d + 1); }
+  })(0, 0, rnd(-.12, .12), rnd(20, 27), 5.5, 0);
+  return segs;
+}
+function drawTree(t) {
+  seed(t.id * 17);
+  const p = P(t.x, t.y, 0);
+  ctx.beginPath(); ctx.ellipse(p[0], p[1] + 1, 11, 5, 0, 0, 7); ctx.fillStyle = C.shade; ctx.fill();
+  for (const s of t.segs) line([[p[0] + s[0], p[1] - s[1]], [p[0] + s[2], p[1] - s[3]]], s[4]);
+}
+function fence(x0, y0, x1, y1, sd, rails) {
+  seed(sd);
+  for (const z of rails || [3, 12]) line([P(x0, y0, z), P(x1, y1, z)], 1.3);
+  const n = Math.max(1, Math.round(Math.hypot(x1 - x0, y1 - y0) / 15));
+  for (let i = 0; i <= n; i++) {
+    const x = lerp(x0, x1, i / n), y = lerp(y0, y1, i / n), p = P(x, y, 0);
+    if (!onScreen(p, 30)) continue;
+    seed(sd + i * 3 + 1);
+    const top = P(x, y, 16);
+    line([p, top], 1.4); dot(top, 1.3);
+  }
+}
+
+/* ---------- names ---------- */
+const FIRST = ['Olga', 'Bruno', 'Agnes', 'Mort', 'Edith', 'Ignatius', 'Wilma', 'Otto', 'Hester', 'Cornelius', 'Mabel', 'Ambrose', 'Pearl', 'Enzo', 'Greta', 'Silas', 'Dolores', 'Horace', 'Beatrix', 'Thaddeus', 'Nell', 'Rufus', 'Ida', 'Casimir', 'Lupe', 'Amos', 'Fern', 'Ezra', 'Opal', 'Gus', 'Minerva', 'Abel', 'Tilda', 'Leopold', 'Vera', 'Chucho', 'Remedios', 'Basil', 'Elvira', 'Percy'];
+const LAST = ['Grimsby', 'Mortlake', 'Underhill', 'Stillwater', 'Graves', 'Holloway', 'Restrepo', 'Coffin', 'Nightingale', 'Ashdown', 'Moss', 'Yew', 'Barrow', 'Quietly', 'Loam', 'Crypt'];
+const RELS = ['Grandma', 'Grandpa', 'Aunt', 'Uncle', 'Cousin', 'Great-aunt', 'Great-uncle', 'Old'];
+
+/* ---------- world ---------- */
+let level = 1, GW, GH, gateY, graves, trees, decor, holes, tug, trailers, flying, fam, surname;
+let state = 'title', time = 0, woken = 0, started = false, exitT = 0, bangs = [];
+const cam = { x: 0, y: 0 };
+const GATE = 52;
+
+function build() {
+  const n = Math.min(2 + level, 8);
+  GW = Math.min(900 + 110 * level, 1700); GH = Math.min(760 + 80 * level, 1300);
+  gateY = GH / 2;
+  graves = []; trees = []; decor = []; holes = []; flying = []; bangs = [];
+  let id = 1;
+  surname = pick(LAST);
+  const others = LAST.filter(s => s !== surname);
+  let ci = 0;
+  for (let x = 110; x <= GW - 190; x += 82, ci++) {
+    let ri = 0;
+    const dir = (Math.floor(ci / 4) % 2) ? 0 : Math.PI / 2;
+    for (let y = 100; y <= GH - 90; y += 82, ri++) {
+      if (ci % 4 === 3 || ri % 3 === 2) continue;
+      const r = Math.random();
+      if (r > .72) continue;
+      const px = x + rnd(-9, 9), py = y + rnd(-9, 9);
+      if (r < .07) trees.push({ id: id++, x: px, y: py, segs: makeTree(), tree: true });
+      else graves.push({
+        id: id++, x: px, y: py, a: dir + rnd(-.14, .14), kind: pick(KINDS), side: Math.random() < .5 ? 1 : -1,
+        name: pick(FIRST) + ' ' + pick(others), flowers: Math.random() < .13, awake: false, shake: 0, taken: false, fam: false
+      });
+    }
+  }
+  // choose the family: spread out, away from the gate
+  const sx = GW - 75, sy = gateY + 60;
+  const pool = graves.slice().sort(() => Math.random() - .5);
+  fam = [];
+  for (let minD = 230; fam.length < n && minD > 0; minD -= 40)
+    for (const g of pool) {
+      if (fam.length >= n) break;
+      if (g.fam || Math.hypot(g.x - sx, g.y - sy) < 260) continue;
+      if (fam.every(f => Math.hypot(f.x - g.x, f.y - g.y) > minD)) { g.fam = true; fam.push(g); }
+    }
+  const firsts = FIRST.slice().sort(() => Math.random() - .5);
+  fam.forEach((g, i) => { g.first = firsts[i]; g.rel = pick(RELS); g.name = firsts[i] + ' ' + surname; g.flowers = true; });
+  for (let i = 0; i < GW * GH / 7000; i++) decor.push({ x: rnd(10, GW - 10), y: rnd(10, GH - 10), k: Math.random() < .7 ? 0 : 1, id: i });
+
+  tug = { x: sx, y: sy, a: -Math.PI / 2, v: 0 };
+  trailers = [];
+  let lead = tug, rear = 17;
+  for (let i = 0; i < fam.length; i++) {
+    const t = { i, x: lead.x, y: lead.y + rear + 26, a: -Math.PI / 2, load: null, reserved: false };
+    trailers.push(t); lead = t; rear = 15;
+  }
+  time = 0; woken = 0; started = false; exitT = 0;
+  const c = P(tug.x, tug.y); cam.x = c[0]; cam.y = c[1];
+  renderList(); renderStats();
+}
+
+function renderList() {
+  $('famTitle').textContent = 'The ' + surname + ' family';
+  const ul = $('famList'); ul.textContent = '';
+  for (const g of fam) {
+    const li = document.createElement('li'); if (g.taken) li.className = 'got';
+    li.appendChild(document.createElement('i'));
+    li.appendChild(document.createTextNode(g.rel + ' ' + g.first));
+    ul.appendChild(li);
+  }
+}
+function renderStats() {
+  const s = Math.floor(time);
+  $('time').textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  $('woken').textContent = woken + (woken === 1 ? ' neighbour woken' : ' neighbours woken');
+}
+
+/* ---------- sound ---------- */
+let ac = null, muted = false;
+function snd(f, d, type, v, slide) {
+  if (!ac || muted) return;
+  try {
+    const o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime;
+    o.type = type || 'triangle'; o.frequency.setValueAtTime(f, t);
+    if (slide) o.frequency.exponentialRampToValueAtTime(f * slide, t + d);
+    g.gain.setValueAtTime(v || .08, t); g.gain.exponentialRampToValueAtTime(.0001, t + d);
+    o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + d);
+  } catch (e) {}
+}
+$('mute').addEventListener('click', () => { muted = !muted; $('mute').textContent = 'sound: ' + (muted ? 'off' : 'on'); });
+
+/* ---------- input ---------- */
+const keys = {};
+const stick = { on: false, id: null, ox: 0, oy: 0, x: 0, y: 0 };
+addEventListener('keydown', e => {
+  keys[e.key.toLowerCase()] = true;
+  if (e.key.startsWith('Arrow') || e.key === ' ') e.preventDefault();
+  if (e.key === 'Enter' || e.key === ' ') { if (state === 'title') start(); else if (state === 'won') next(); }
+});
+addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; stick.on = false; });
+cv.addEventListener('pointerdown', e => {
+  if (state !== 'play') return;
+  stick.on = true; stick.id = e.pointerId; stick.ox = stick.x = e.clientX; stick.oy = stick.y = e.clientY;
+  try { cv.setPointerCapture(e.pointerId); } catch (err) {}
+});
+cv.addEventListener('pointermove', e => { if (stick.on && e.pointerId === stick.id) { stick.x = e.clientX; stick.y = e.clientY; } });
+const up = e => { if (e.pointerId === stick.id) stick.on = false; };
+cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+function inputDir() {           // desired direction on screen, magnitude 0..1
+  let x = 0, y = 0;
+  if (keys.arrowleft || keys.a) x -= 1; if (keys.arrowright || keys.d) x += 1;
+  if (keys.arrowup || keys.w) y -= 1; if (keys.arrowdown || keys.s) y += 1;
+  if (x || y) { const m = Math.hypot(x, y); return [x / m, y / m, 1]; }
+  if (stick.on) {
+    const dx = stick.x - stick.ox, dy = stick.y - stick.oy, m = Math.hypot(dx, dy);
+    if (m > 8) return [dx / m, dy / m, clamp(m / 45, .35, 1)];
+  }
+  return [0, 0, 0];
+}
+
+/* ---------- simulation ---------- */
+function wake(g) {
+  if (g.awake || g.fam) return;
+  g.awake = true; g.shake = .5; woken++;
+  bangs.push({ x: g.x, y: g.y, t: 0 });
+  snd(110, .18, 'square', .06, .5); renderStats();
+}
+function allAboard() { return fam.every(g => g.taken); }
+function update(dt) {
+  if (state === 'play' || state === 'exit') {
+    let [ix, iy, mag] = inputDir();
+    if (state === 'exit') { const d = P(1, 0); const m = Math.hypot(d[0], d[1]); ix = d[0] / m; iy = d[1] / m; mag = 1; }
+    let want = 0;
+    if (mag > 0) {
+      if (!started) started = true;
+      const wx = (ix / A + iy / B) / 2, wy = (iy / B - ix / A) / 2;
+      const diff = wrap(Math.atan2(wy, wx) - tug.a);
+      const mt = 3.3 * dt * clamp(tug.v / 50, .3, 1);
+      tug.a = wrap(tug.a + clamp(diff, -mt, mt));
+      want = 150 * mag * (Math.abs(diff) > 1.8 ? .55 : 1);
+    }
+    tug.v += clamp(want - tug.v, -300 * dt, 190 * dt);
+    tug.x += Math.cos(tug.a) * tug.v * dt; tug.y += Math.sin(tug.a) * tug.v * dt;
+    if (started && state === 'play') time += dt;
+
+    if (state === 'play') {
+      for (const o of graves) {
+        if (o.taken) continue;
+        const dx = tug.x - o.x, dy = tug.y - o.y, d = Math.hypot(dx, dy) || 1;
+        if (o.fam) {
+          if (d < 46) {
+            const t = trailers.find(t => !t.reserved);
+            o.taken = true; t.reserved = true;
+            holes.push({ x: o.x, y: o.y, a: o.a, id: o.id });
+            flying.push({ g: o, t: 0, tr: t });
+            snd(520, .12, 'triangle', .09, 1.5); setTimeout(() => snd(780, .16, 'triangle', .08), 90);
+            renderList();
+            if (allAboard()) setTimeout(() => { snd(392, .12); setTimeout(() => snd(523, .12), 110); setTimeout(() => snd(659, .22), 220); }, 350);
+          }
+          continue;
+        }
+        if (d < 28) { tug.x = o.x + dx / d * 28; tug.y = o.y + dy / d * 28; tug.v *= .86; wake(o); }
+      }
+      for (const o of trees) {
+        const dx = tug.x - o.x, dy = tug.y - o.y, d = Math.hypot(dx, dy) || 1;
+        if (d < 20) { tug.x = o.x + dx / d * 20; tug.y = o.y + dy / d * 20; tug.v *= .86; }
+      }
+      const m = 20, open = allAboard();
+      tug.y = clamp(tug.y, m, GH - m); tug.x = Math.max(tug.x, m);
+      if (open && Math.abs(tug.y - gateY) < GATE - 14) {
+        if (tug.x > GW - m) tug.y = clamp(tug.y, gateY - GATE + 18, gateY + GATE - 18);
+        if (tug.x > GW + 30) { state = 'exit'; exitT = 0; }
+      } else tug.x = Math.min(tug.x, GW - m);
+    }
+
+    let lead = tug, rear = 17;
+    for (const t of trailers) {
+      const hx = lead.x - Math.cos(lead.a) * rear, hy = lead.y - Math.sin(lead.a) * rear;
+      let vx = t.x - hx, vy = t.y - hy; const d = Math.hypot(vx, vy) || 1; vx /= d; vy /= d;
+      t.x = hx + vx * 26; t.y = hy + vy * 26; t.a = Math.atan2(-vy, -vx);
+      t.hx = hx; t.hy = hy;
+      if (state === 'play') for (const o of graves) if (!o.taken && !o.fam && !o.awake && Math.abs(o.x - t.x) < 24 && Math.hypot(o.x - t.x, o.y - t.y) < 22) wake(o);
+      lead = t; rear = 15;
+    }
+    for (const f of flying) { f.t += dt / .55; if (f.t >= 1) { f.tr.load = f.g; snd(180, .08, 'sine', .08); } }
+    flying = flying.filter(f => f.t < 1);
+
+    if (state === 'exit') {
+      exitT += dt;
+      if (exitT > 2.4) win();
+    } else {
+      const c = P(tug.x + Math.cos(tug.a) * tug.v * .25, tug.y + Math.sin(tug.a) * tug.v * .25);
+      const k = 1 - Math.exp(-dt * 4);
+      cam.x = lerp(cam.x, c[0], k); cam.y = lerp(cam.y, c[1], k);
+    }
+  }
+  for (const g of graves) if (g.shake > 0) g.shake -= dt;
+  for (const b of bangs) b.t += dt;
+  bangs = bangs.filter(b => b.t < 1);
+}
+
+/* ---------- drawing ---------- */
+let vx0, vy0, vx1, vy1;
+const onScreen = (p, m) => p[0] > vx0 - m && p[0] < vx1 + m && p[1] > vy0 - m && p[1] < vy1 + m;
+function label(text, p, alpha, size, col) {
+  ctx.globalAlpha = alpha;
+  ctx.font = (size || Math.max(9, 12 / scale)) + 'px "Patrick Hand", "Chalkboard SE", "Comic Sans MS", cursive';
+  ctx.textAlign = 'center'; ctx.lineWidth = 3; ctx.strokeStyle = C.paper; ctx.strokeText(text, p[0], p[1]);
+  ctx.fillStyle = col || C.ink; ctx.fillText(text, p[0], p[1]);
+  ctx.globalAlpha = 1;
+}
+function draw(now) {
+  if (!still) boil = Math.floor(now / 170);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.fillStyle = C.paper; ctx.fillRect(0, 0, VW, VH);
+  // squared paper, sliding with the camera
+  const gs = 26 * scale, ox = ((VW / 2 - cam.x * scale) % gs + gs) % gs, oy = ((VH / 2 - cam.y * scale) % gs + gs) % gs;
+  ctx.beginPath();
+  for (let x = ox; x < VW; x += gs) { ctx.moveTo(x, 0); ctx.lineTo(x, VH); }
+  for (let y = oy; y < VH; y += gs) { ctx.moveTo(0, y); ctx.lineTo(VW, y); }
+  ctx.lineWidth = 1; ctx.strokeStyle = C.grid; ctx.stroke();
+
+  ctx.setTransform(DPR * scale, 0, 0, DPR * scale, DPR * (VW / 2 - cam.x * scale), DPR * (VH / 2 - cam.y * scale));
+  ctx.lineJoin = ctx.lineCap = 'round';
+  vx0 = cam.x - VW / 2 / scale; vx1 = cam.x + VW / 2 / scale; vy0 = cam.y - VH / 2 / scale; vy1 = cam.y + VH / 2 / scale;
+
+  for (const d of decor) {
+    const p = P(d.x, d.y); if (!onScreen(p, 10)) continue;
+    seed(d.id * 5 + 40000);
+    if (d.k === 0) { line([[p[0] - 3, p[1] - 4], [p[0] - 1, p[1]]], 1); line([[p[0], p[1] - 5.5], [p[0], p[1]]], 1); line([[p[0] + 3, p[1] - 4], [p[0] + 1, p[1]]], 1); }
+    else { ctx.beginPath(); ctx.ellipse(p[0], p[1], 2.6, 1.6, 0, 0, 7); ctx.lineWidth = 1; ctx.strokeStyle = C.ink; ctx.stroke(); }
+  }
+  for (const h of holes) {
+    const p = P(h.x, h.y); if (!onScreen(p, 40)) continue;
+    seed(h.id * 7 + 2);
+    shape(corners(h.x + Math.cos(h.a) * 2, h.y + Math.sin(h.a) * 2, h.a, 30, 19).map(c => P(c[0], c[1])), C.shade, 2);
+  }
+  fence(0, 0, GW, 0, 50000); fence(0, 0, 0, GH, 51000);
+
+  // everything standing up, back to front
+  const items = [];
+  for (const g of graves) if (!g.taken) { const p = P(g.x, g.y); if (onScreen(p, 50)) items.push([g.x + g.y, 0, g]); }
+  for (const t of trees) { const p = P(t.x, t.y); if (onScreen(p, 80)) items.push([t.x + t.y, 1, t]); }
+  items.push([tug.x + tug.y, 2, tug]);
+  for (const t of trailers) {
+    items.push([t.x + t.y, 3, t]);
+    const fxp = [t.x + Math.cos(t.a) * 15, t.y + Math.sin(t.a) * 15];
+    items.push([(t.hx + t.hy + fxp[0] + fxp[1]) / 2 - 4, 4, [[t.hx, t.hy], fxp, 9500 + t.i]]);
+  }
+  for (const f of flying) {
+    const e = f.t * f.t * (3 - 2 * f.t);
+    f.x = lerp(f.g.x, f.tr.x, e); f.y = lerp(f.g.y, f.tr.y, e); f.z = 10.5 * e + Math.sin(Math.PI * f.t) * 46;
+    f.a = f.g.a + wrap(f.tr.a - f.g.a) * e;
+    items.push([f.x + f.y + 60, 5, f]);
+  }
+  items.sort((p, q) => p[0] - q[0]);
+  const open = allAboard();
+  const gateFront = () => {
+    fence(GW, 0, GW, gateY - GATE, 52000); fence(GW, gateY + GATE, GW, GH, 53000); fence(0, GH, GW, GH, 54000);
+    if (open) { fence(GW, gateY - GATE, GW + 34, gateY - GATE - 14, 55000, [3, 9, 15]); fence(GW, gateY + GATE, GW + 34, gateY + GATE + 14, 55500, [3, 9, 15]); }
+    else fence(GW, gateY - GATE, GW, gateY + GATE, 55000, [3, 9, 15]);
+    seed(56000);
+    for (const s of [-1, 1]) { box(GW, gateY + s * GATE, 0, 11, 11, 0, 25); box(GW, gateY + s * GATE, 0, 14, 14, 25, 28); }
+  };
+  const drawItem = it => {
+    const o = it[2];
+    if (it[1] === 0) {
+      const sh = o.shake > 0 ? Math.sin(o.shake * 60) * 1.6 : 0;
+      drawGrave(o, o.x + sh, o.y - sh, 0, o.a, o.awake ? 'grumpy' : 'sleep');
+      if (o.flowers) flowers(o);
+    } else if (it[1] === 1) drawTree(o);
+    else if (it[1] === 2) drawTug(o);
+    else if (it[1] === 3) drawTrailer(o);
+    else if (it[1] === 4) drawBar(o[0], o[1], o[2]);
+    else drawGrave(o.g, o.x, o.y, o.z, o.a, 'happy');
+  };
+  const inside = it => (it[1] === 4 ? Math.max(it[2][0][0], it[2][1][0]) : it[2].x) <= GW + 4;
+  for (const it of items) if (inside(it)) drawItem(it);
+  gateFront();
+  for (const it of items) if (!inside(it)) drawItem(it);
+
+  // name tags near the tug
+  if (state === 'play') for (const g of graves) {
+    if (g.taken) continue;
+    const d = Math.hypot(g.x - tug.x, g.y - tug.y); if (d > 135) continue;
+    label(g.name, P(g.x - Math.cos(g.a) * 8, g.y - Math.sin(g.a) * 8, 34), clamp((135 - d) / 40, 0, 1));
+  }
+  for (const b of bangs) {
+    const p = P(b.x, b.y, 40 + b.t * 14);
+    ctx.font = '18px "Permanent Marker", "Marker Felt", cursive'; ctx.textAlign = 'center';
+    ctx.globalAlpha = 1 - b.t; ctx.lineWidth = 3; ctx.strokeStyle = C.paper; ctx.strokeText('!', p[0], p[1]);
+    ctx.fillStyle = C.ink; ctx.fillText('!', p[0], p[1]); ctx.globalAlpha = 1;
+  }
+  if (open && state === 'play') {
+    const bob = still ? 0 : Math.sin(now / 250) * 2;
+    label('EXIT', P(GW, gateY, 44 + bob), 1, 13);
+    const tp = P(tug.x, tug.y, 12), gp = P(GW + 20, gateY, 12), dx = gp[0] - tp[0], dy = gp[1] - tp[1], d = Math.hypot(dx, dy);
+    if (d > 110) {
+      const ux = dx / d, uy = dy / d, bx = tp[0] + ux * (52 + bob), by = tp[1] + uy * (52 + bob);
+      seed(60000);
+      line([[bx - ux * 16, by - uy * 16], [bx, by]], 3);
+      shape([[bx + ux * 17, by + uy * 17], [bx - uy * 7, by + ux * 7], [bx + uy * 7, by - ux * 7]], C.marigold, 1.6);
+    }
+  }
+
+  // steering thumb
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  if (stick.on && state === 'play') {
+    ctx.beginPath(); ctx.arc(stick.ox, stick.oy, 45, 0, 7); ctx.lineWidth = 1.5; ctx.strokeStyle = C.ink;
+    ctx.setLineDash([5, 6]); ctx.stroke(); ctx.setLineDash([]);
+    const dx = stick.x - stick.ox, dy = stick.y - stick.oy, m = Math.hypot(dx, dy) || 1, k = Math.min(m, 45) / m;
+    ctx.beginPath(); ctx.arc(stick.ox + dx * k, stick.oy + dy * k, 16, 0, 7);
+    ctx.globalAlpha = .85; ctx.fillStyle = C.marigold; ctx.fill(); ctx.globalAlpha = 1; ctx.lineWidth = 2; ctx.stroke();
+  }
+}
+
+/* ---------- flow ---------- */
+function start() {
+  if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+  $('titleSheet').hidden = true; $('winSheet').hidden = true; $('hud').hidden = false;
+  state = 'play';
+}
+function win() {
+  state = 'won'; stick.on = false;
+  const s = Math.floor(time);
+  $('winLine').textContent = 'The ' + surname + ' family is on the road: ' + fam.length + ' aboard in ' + Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') + '.';
+  $('winVerdict').textContent = woken === 0 ? 'Not a single neighbour woke up. Silent as the grave.'
+    : woken < 4 ? woken + (woken === 1 ? ' neighbour was' : ' neighbours were') + ' woken. They will get over it. Eventually.'
+    : woken + ' neighbours were woken. Expect a strongly worded haunting.';
+  $('winSheet').hidden = false; $('nextBtn').focus();
+  snd(523, .14); setTimeout(() => snd(659, .14), 130); setTimeout(() => snd(784, .3), 260);
+}
+function next() { level++; build(); start(); }
+$('startBtn').addEventListener('click', start);
+$('nextBtn').addEventListener('click', next);
+
+build();
+let last = performance.now(), tick = 0;
+function frame(now) {
+  const dt = Math.min((now - last) / 1000, .05); last = now;
+  if (++tick % 45 === 0) { readColors(); if (state === 'play') renderStats(); }
+  if (cv.clientWidth !== VW || cv.clientHeight !== VH) resize();
+  update(dt); draw(now);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+window.__ft = { get tug() { return tug; }, get fam() { return fam; }, get state() { return state; }, get gate() { return [GW, gateY]; } };
+})();
+</script>
+</body>
+</html>
