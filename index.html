@@ -93,9 +93,8 @@ button:focus-visible { outline: 3px solid var(--marigold); outline-offset: 3px; 
     <h2 id="famTitle">The family</h2>
     <ul id="famList"></ul>
   </div>
-  <div class="note stats">
+  <div class="note stats" id="stats">
     <div id="time">0:00</div>
-    <div id="woken">0 neighbours woken</div>
     <button id="mute" type="button">sound: on</button>
   </div>
 </div>
@@ -103,8 +102,8 @@ button:focus-visible { outline: 3px solid var(--marigold); outline-offset: 3px; 
 <div class="sheet" id="titleSheet">
   <div class="card">
     <h1>Family Trip</h1>
-    <p>Everyone is coming along this year. Drive through the graveyard and load up the family. Their names are on your list.</p>
-    <p class="small">Drag anywhere, or use the arrow keys, to steer. Take the corners wide so the trailers don't wake the neighbours.</p>
+    <p>Everyone is coming along this year. The graveyard is a whole city, and the family is scattered across it. Three are near the gate. One is across town.</p>
+    <p class="small">Drag anywhere, or use the arrow keys, to steer. Ghosts spook passengers off the cart unless you drive into them first. Skeletons and pumpkins just get in the way.</p>
     <button id="startBtn" type="button">Start the engine</button>
   </div>
 </div>
@@ -339,65 +338,214 @@ function fence(x0, y0, x1, y1, sd, rails) {
   }
 }
 
+
+/* ---------- city furniture ---------- */
+function drawMaus(m) {
+  seed(m.id * 31);
+  const { x, y, a } = m, fx = Math.cos(a), fy = Math.sin(a), sx = -fy, sy = fx, L = 90, Wd = 64, H = 34;
+  shadow(x, y, a, L + 6, Wd + 6);
+  box(x, y, a, L, Wd, 0, H);
+  const q = (u, z) => P(x + fx * L / 2 + sx * u, y + fy * L / 2 + sy * u, z);
+  shape([q(-8, 0), q(8, 0), q(8, 17), q(4, 22), q(-4, 22), q(-8, 17)], C.shade, 1.4);     // door
+  for (const u of [-24, -17, 17, 24]) line([q(u, 0), q(u, H)], 1.2);                      // columns
+  box(x, y, a, L + 8, Wd + 8, H, H + 3);
+  const c = corners(x, y, a, L + 8, Wd + 8), z = H + 3, rz = H + 22;
+  const r0 = [x + fx * (L / 2 + 4), y + fy * (L / 2 + 4)], r1 = [x - fx * (L / 2 + 4), y - fy * (L / 2 + 4)];
+  const faces = [[c[0], c[1], r0], [c[2], c[3], r1], [c[3], c[0], r0, r1], [c[1], c[2], r1, r0]];
+  faces.map(f => [f.reduce((s, p) => s + p[0] + p[1], 0) / f.length, f]).sort((p, q2) => p[0] - q2[0])
+    .forEach(([, f]) => shape(f.map(p => P(p[0], p[1], (p === r0 || p === r1) ? rz : z))));
+  const g = P(r0[0], r0[1], rz - 9); dot(g, 2.4, C.paper, 1.2);
+}
+function drawStatue(s) {
+  seed(s.id * 37);
+  shadow(s.x, s.y, 0, 34, 34);
+  box(s.x, s.y, 0, 30, 30, 0, 6); box(s.x, s.y, 0, 22, 22, 6, 18);
+  box(s.x, s.y, 0, 10, 10, 18, 58);
+  const t = P(s.x, s.y, 58), w = 5 * A * 1.42;
+  shape([[t[0] - w, t[1]], [t[0], t[1] + 5 * B * 1.42], [t[0] + w, t[1]], [t[0], t[1] - 12]]);
+}
+function drawLamp(l) {
+  seed(l.id * 41);
+  const p = P(l.x, l.y, 0), t = P(l.x, l.y, 32);
+  line([p, t], 2.2); line([[p[0] - 3, p[1]], [p[0] + 3, p[1]]], 2);
+  shape([[t[0] - 3.5, t[1]], [t[0] - 2.5, t[1] - 7], [t[0] + 2.5, t[1] - 7], [t[0] + 3.5, t[1]]], C.marigold, 1.3);
+  line([[t[0] - 4, t[1] - 7], [t[0], t[1] - 10], [t[0] + 4, t[1] - 7]], 1.4);
+}
+function groundShadow(x, y, rx, a) {
+  const p = P(x, y);
+  ctx.globalAlpha = a; ctx.beginPath(); ctx.ellipse(p[0], p[1] + 1, rx, rx * .45, 0, 0, 7); ctx.fillStyle = C.shade; ctx.fill(); ctx.globalAlpha = 1;
+}
+
+/* ---------- the residents ---------- */
+function skull(x, y) {
+  dot([x, y], 4.6, C.paper, 1.5); dot([x - 1.7, y - .3], 1); dot([x + 1.7, y - .3], 1);
+  line([[x - 1.3, y + 2.8], [x + 1.3, y + 2.8]], 1);
+}
+function drawSkeleton(s) {
+  seed(s.id * 19);
+  const p = P(s.x, s.y), x = p[0], y = p[1];
+  if (s.down > 0) {
+    line([[x - 9, y - 1], [x - 1, y + 2]], 1.8); line([[x + 2, y - 3], [x + 10, y]], 1.8); line([[x - 4, y + 4], [x + 6, y + 5]], 1.8);
+    line([[x - 7, y + 5], [x - 3, y + 7]], 1.6);
+    skull(x + 1, y - 5); return;
+  }
+  groundShadow(s.x, s.y, 6, .5);
+  const w = Math.sin(s.ph), hip = [x, y - 11], neck = [x, y - 21];
+  line([hip, [x - 2.5 + w * 3.5, y]], 1.6); line([hip, [x + 2.5 - w * 3.5, y]], 1.6);
+  line([hip, neck], 1.6);
+  for (let k = 0; k < 3; k++) line([[x - 3.4, y - 18 + k * 2.5], [x + 3.4, y - 18 + k * 2.5]], 1.2);
+  line([[x, y - 20], [x - 5.5 - w * 2, y - 11]], 1.4);
+  if (s.wave) line([[x, y - 20], [x + 6, y - 24], [x + 7 + Math.sin(s.ph * 3) * 2, y - 31]], 1.4);
+  else line([[x, y - 20], [x + 5.5 + w * 2, y - 11]], 1.4);
+  skull(x, y - 25.5);
+}
+function drawGhost(g, now) {
+  seed(g.id * 23);
+  const bob = still ? 0 : Math.sin(now / 400 + g.id) * 2.5, p = P(g.x, g.y, 9 + bob), w = 8.5, h = 22, pts = [];
+  groundShadow(g.x, g.y, 7, .22 * g.alpha);
+  for (let i = 0; i <= 8; i++) { const t = Math.PI * (1 - i / 8); pts.push([p[0] + w * Math.cos(t), p[1] - h + w - w * Math.sin(t)]); }
+  const ph = still ? 0 : now / 220 + g.id;
+  for (let i = 0; i <= 4; i++) pts.push([p[0] + w - i * w / 2, p[1] - (i % 2 ? 3.5 : 0) + Math.sin(ph + i) * 1.2]);
+  ctx.globalAlpha = g.alpha * .92; shape(pts);
+  const ey = p[1] - h + 9;
+  dot([p[0] - 3, ey], 1.6); dot([p[0] + 3, ey], 1.6);
+  if (g.chase) { dot([p[0], ey + 5.5], 2.1); line([[p[0] - 5.5, ey - 4], [p[0] - 1.5, ey - 2.6]], 1.3); line([[p[0] + 5.5, ey - 4], [p[0] + 1.5, ey - 2.6]], 1.3); }
+  ctx.globalAlpha = 1;
+}
+function pumpkinBody(p, r, facey) {
+  ctx.beginPath(); ctx.ellipse(p[0], p[1] - r * .8, r, r * .8, 0, 0, 7);
+  ctx.fillStyle = C.marigold; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = C.ink; ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(p[0], p[1] - r * .8, r * .48, r * .8, 0, 0, 7); ctx.lineWidth = .9; ctx.stroke();
+  line([[p[0], p[1] - r * 1.6], [p[0] + 1.5, p[1] - r * 1.6 - 3.5]], 2.2);
+  if (facey) {
+    const y = p[1] - r * .95;
+    shape([[p[0] - 4.2, y], [p[0] - 1.6, y], [p[0] - 2.9, y - 2.6]], C.ink, 0);
+    shape([[p[0] + 4.2, y], [p[0] + 1.6, y], [p[0] + 2.9, y - 2.6]], C.ink, 0);
+    line([[p[0] - 3.6, y + 2.6], [p[0] - 1.6, y + 4], [p[0], y + 2.8], [p[0] + 1.6, y + 4], [p[0] + 3.6, y + 2.6]], 1.3);
+  }
+}
+function drawPumpkin(k) {
+  seed(k.id * 29);
+  const g = P(k.x, k.y);
+  if (k.splat > 0) {
+    ctx.beginPath(); ctx.ellipse(g[0], g[1], 12, 5.5, 0, 0, 7); ctx.fillStyle = C.marigold; ctx.fill(); ctx.lineWidth = 1.4; ctx.strokeStyle = C.ink; ctx.stroke();
+    dot([g[0] - 4, g[1] - 1], .9); dot([g[0] + 3, g[1] + 1.5], .9); dot([g[0] + 6, g[1] - 1.5], .9);
+    line([[g[0] - 15, g[1] + 3], [g[0] - 18, g[1] + 4]], 1.3); line([[g[0] + 15, g[1] - 3], [g[0] + 18, g[1] - 4]], 1.3);
+    return;
+  }
+  groundShadow(k.x, k.y, 8 - k.z * .2, .5);
+  const p = P(k.x, k.y, k.z + 2);
+  line([[p[0] - 3, p[1] - 2], [p[0] - 4.5, p[1] + 2]], 1.6); line([[p[0] + 3, p[1] - 2], [p[0] + 4.5, p[1] + 2]], 1.6);
+  pumpkinBody(p, 8.5, true);
+}
+
 /* ---------- names ---------- */
 const FIRST = ['Olga', 'Bruno', 'Agnes', 'Mort', 'Edith', 'Ignatius', 'Wilma', 'Otto', 'Hester', 'Cornelius', 'Mabel', 'Ambrose', 'Pearl', 'Enzo', 'Greta', 'Silas', 'Dolores', 'Horace', 'Beatrix', 'Thaddeus', 'Nell', 'Rufus', 'Ida', 'Casimir', 'Lupe', 'Amos', 'Fern', 'Ezra', 'Opal', 'Gus', 'Minerva', 'Abel', 'Tilda', 'Leopold', 'Vera', 'Chucho', 'Remedios', 'Basil', 'Elvira', 'Percy'];
 const LAST = ['Grimsby', 'Mortlake', 'Underhill', 'Stillwater', 'Graves', 'Holloway', 'Restrepo', 'Coffin', 'Nightingale', 'Ashdown', 'Moss', 'Yew', 'Barrow', 'Quietly', 'Loam', 'Crypt'];
-const RELS = ['Grandma', 'Grandpa', 'Aunt', 'Uncle', 'Cousin', 'Great-aunt', 'Great-uncle', 'Old'];
+const WOMEN = new Set(['Olga', 'Agnes', 'Edith', 'Wilma', 'Hester', 'Mabel', 'Pearl', 'Greta', 'Dolores', 'Beatrix', 'Nell', 'Ida', 'Lupe', 'Fern', 'Opal', 'Minerva', 'Tilda', 'Vera', 'Remedios', 'Elvira']);
+const RELS = { f: ['Grandma', 'Aunt', 'Great-aunt', 'Cousin', 'Old'], m: ['Grandpa', 'Uncle', 'Great-uncle', 'Cousin', 'Old'] };
 
-/* ---------- world ---------- */
-let level = 1, GW, GH, gateY, graves, trees, decor, holes, tug, trailers, flying, fam, surname;
-let state = 'title', time = 0, woken = 0, started = false, exitT = 0, bangs = [];
+/* ---------- the city ---------- */
+const COLS = 9, ROWS = 8, BW = 300, BH = 250, SW = 100, CX = BW + SW, CY = BH + SW, GATE = 52, HC = 200;
+const GW = SW + COLS * CX, GH = SW + ROWS * CY, gateY = SW / 2 + 4 * CY;
+let level = 1, graves, tagged, trees, decor, holes, tug, trailers, flying, fam, surname;
+let blocks, maus, lamps, statues, patchP, skels, ghosts, pumps, hash;
+let state = 'title', time = 0, woken = 0, spooks = 0, started = false, exitT = 0, bangs = [], slip = 0, slipDir = 1;
 const cam = { x: 0, y: 0 };
-const GATE = 52;
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const hkey = (x, y) => Math.floor(x / HC) * 1000 + Math.floor(y / HC);
+function hadd(o) { const k = hkey(o.x, o.y); (hash.get(k) || hash.set(k, []).get(k)).push(o); }
+function near(x, y, fn) {
+  const cx = Math.floor(x / HC), cy = Math.floor(y / HC);
+  for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) { const l = hash.get((cx + i) * 1000 + cy + j); if (l) for (const o of l) fn(o); }
+}
+const node = (i, j) => [SW / 2 + i * CX, SW / 2 + j * CY];
 
 function build() {
-  const n = Math.min(2 + level, 8);
-  GW = Math.min(900 + 110 * level, 1700); GH = Math.min(760 + 80 * level, 1300);
-  gateY = GH / 2;
-  graves = []; trees = []; decor = []; holes = []; flying = []; bangs = [];
+  graves = []; trees = []; decor = []; holes = []; flying = []; bangs = []; trailers = [];
+  blocks = []; maus = []; lamps = []; statues = []; patchP = []; skels = []; ghosts = []; pumps = []; hash = new Map();
   let id = 1;
   surname = pick(LAST);
   const others = LAST.filter(s => s !== surname);
-  let ci = 0;
-  for (let x = 110; x <= GW - 190; x += 82, ci++) {
-    let ri = 0;
-    const dir = (Math.floor(ci / 4) % 2) ? 0 : Math.PI / 2;
-    for (let y = 100; y <= GH - 90; y += 82, ri++) {
-      if (ci % 4 === 3 || ri % 3 === 2) continue;
-      const r = Math.random();
-      if (r > .72) continue;
-      const px = x + rnd(-9, 9), py = y + rnd(-9, 9);
-      if (r < .07) trees.push({ id: id++, x: px, y: py, segs: makeTree(), tree: true });
-      else graves.push({
-        id: id++, x: px, y: py, a: dir + rnd(-.14, .14), kind: pick(KINDS), side: Math.random() < .5 ? 1 : -1,
-        name: pick(FIRST) + ' ' + pick(others), flowers: Math.random() < .13, awake: false, shake: 0, taken: false, fam: false
-      });
+  const start = { x: GW - 90, y: gateY };
+  const grave = (x, y, a, edge) => graves.push({
+    id: id++, x, y, a: a + rnd(-.12, .12), kind: pick(KINDS), side: Math.random() < .5 ? 1 : -1, edge,
+    name: pick(FIRST) + ' ' + pick(others), flowers: edge && Math.random() < .05, awake: false, shake: 0, taken: false, fam: false, r: 15
+  });
+  const tree = (x, y) => trees.push({ id: id++, x, y, segs: makeTree(), r: 8 });
+  for (let i = 0; i < COLS; i++) for (let j = 0; j < ROWS; j++) {
+    const bx = SW + i * CX, by = SW + j * CY, mx = bx + BW / 2, my = by + BH / 2, r = Math.random();
+    const type = Math.hypot(mx - start.x, my - start.y) < 480 ? 'graves' : (i === 4 && j === 3) ? 'plaza'
+      : r < .58 ? 'graves' : r < .71 ? 'maus' : r < .82 ? 'patch' : r < .92 ? 'grove' : 'plaza';
+    const b = { id: id++, x: bx, y: by, mx, my, type, i, j }; blocks.push(b);
+    const dir = Math.random() < .5 ? 0 : Math.PI / 2;
+    if (type === 'graves') {
+      for (let gx = 0; gx < 6; gx++) for (let gy = 0; gy < 5; gy++) {
+        const q = Math.random(), edge = gx === 0 || gx === 5 || gy === 0 || gy === 4;
+        if (q < .12) continue;
+        const px = bx + 25 + gx * 50 + rnd(-4, 4), py = by + 33 + gy * 46 + rnd(-4, 4);
+        if (q < .17 && !edge) tree(px, py); else grave(px, py, dir, edge);
+      }
+    } else if (type === 'maus') {
+      const a = Math.random() < .5 ? 0 : Math.PI / 2;
+      for (const ox of [80, 220]) maus.push({ id: id++, x: bx + ox, y: my, a, hw: a ? 32 : 45, hh: a ? 45 : 32 });
+      for (let gx = 0; gx < 6; gx++) for (const gy of [0, 4]) if (Math.random() < .75) grave(bx + 25 + gx * 50, by + 33 + gy * 46 - (gy ? 0 : 8) + (gy ? 8 : 0), Math.PI / 2, true);
+    } else if (type === 'patch') {
+      for (let k = 0; k < 16; k++) patchP.push({ id: id++, x: bx + rnd(18, BW - 18), y: by + rnd(18, BH - 18), r: rnd(4.5, 7.5) });
+      for (let k = 0; k < 3; k++) pumps.push({ id: id++, x: mx + rnd(-90, 90), y: my + rnd(-70, 70), hx: mx, hy: my, z: 0, hopT: 1, wait: rnd(0, 2), splat: 0 });
+    } else if (type === 'grove') {
+      const pts = [];
+      for (let k = 0; k < 60 && pts.length < 10; k++) {
+        const p = { x: bx + rnd(22, BW - 22), y: by + rnd(22, BH - 22) };
+        if (pts.every(o => dist(o, p) > 52)) pts.push(p);
+      }
+      pts.forEach((p, k) => k % 4 === 3 ? grave(p.x, p.y, dir, false) : tree(p.x, p.y));
+    } else {
+      statues.push({ id: id++, x: mx, y: my, r: 20 });
+      for (const [u, v] of [[14, 14], [BW - 14, 14], [14, BH - 14], [BW - 14, BH - 14]]) lamps.push({ id: id++, x: bx + u, y: by + v, r: 5 });
     }
+    if (type !== 'plaza' && Math.random() < .5) lamps.push({ id: id++, x: bx + (Math.random() < .5 ? -9 : BW + 9), y: by + (Math.random() < .5 ? -9 : BH + 9), r: 5 });
   }
-  // choose the family: spread out, away from the gate
-  const sx = GW - 75, sy = gateY + 60;
-  const pool = graves.slice().sort(() => Math.random() - .5);
+  // the family: three a short drive from the gate, the last one across town
+  const cand = graves.filter(g => g.edge).sort(() => Math.random() - .5);
   fam = [];
-  for (let minD = 230; fam.length < n && minD > 0; minD -= 40)
-    for (const g of pool) {
-      if (fam.length >= n) break;
-      if (g.fam || Math.hypot(g.x - sx, g.y - sy) < 260) continue;
-      if (fam.every(f => Math.hypot(f.x - g.x, f.y - g.y) > minD)) { g.fam = true; fam.push(g); }
+  for (let minD = 300; fam.length < 3 && minD > 0; minD -= 60)
+    for (const g of cand) {
+      const d = dist(g, start);
+      if (fam.length >= 3) break;
+      if (g.fam || d < 380 || d > 1050) continue;
+      if (fam.every(f => dist(f, g) > minD)) { g.fam = true; fam.push(g); }
     }
+  fam.sort((p, q) => dist(p, start) - dist(q, start));
+  const farG = cand.find(g => !g.fam && g.x < SW + 2 * CX) || cand.find(g => !g.fam);
+  farG.fam = true; farG.far = true; fam.push(farG);
   const firsts = FIRST.slice().sort(() => Math.random() - .5);
-  fam.forEach((g, i) => { g.first = firsts[i]; g.rel = pick(RELS); g.name = firsts[i] + ' ' + surname; g.flowers = true; });
-  for (let i = 0; i < GW * GH / 7000; i++) decor.push({ x: rnd(10, GW - 10), y: rnd(10, GH - 10), k: Math.random() < .7 ? 0 : 1, id: i });
+  fam.forEach((g, i) => { g.first = firsts[i]; g.rel = pick(RELS[WOMEN.has(firsts[i]) ? 'f' : 'm']); g.name = firsts[i] + ' ' + surname; g.flowers = true; });
+  tagged = graves.filter(g => g.flowers);
+  for (const o of graves) if (!o.fam) hadd(o);
+  for (const o of trees) hadd(o); for (const o of lamps) hadd(o); for (const o of statues) hadd(o);
+  for (let i = 0; i < GW * GH / 9000; i++) decor.push({ x: rnd(10, GW - 10), y: rnd(10, GH - 10), k: Math.random() < .7 ? 0 : 1, id: i });
 
-  tug = { x: sx, y: sy, a: -Math.PI / 2, v: 0 };
-  trailers = [];
-  let lead = tug, rear = 17;
-  for (let i = 0; i < fam.length; i++) {
-    const t = { i, x: lead.x, y: lead.y + rear + 26, a: -Math.PI / 2, load: null, reserved: false };
-    trailers.push(t); lead = t; rear = 15;
+  // residents
+  for (let k = 0, n = 36 + level * 6; k < n; k++) {
+    let i, j; do { i = Math.random() * (COLS + 1) | 0; j = Math.random() * (ROWS + 1) | 0; } while (Math.hypot(node(i, j)[0] - start.x, node(i, j)[1] - start.y) < 300);
+    const s = { id: id++, i, j, ti: i, tj: j, ox: rnd(-34, 34), oy: rnd(-34, 34), ph: rnd(0, 6), down: 0, wave: false };
+    [s.x, s.y] = node(i, j); s.x += s.ox; s.y += s.oy; skels.push(s);
   }
-  time = 0; woken = 0; started = false; exitT = 0;
+  for (let k = 0, n = 12 + level * 3; k < n; k++) {
+    let x, y; do { x = rnd(80, GW - 80); y = rnd(80, GH - 80); } while (Math.hypot(x - start.x, y - start.y) < 650);
+    ghosts.push({ id: id++, x, y, hx: x, hy: y, tx: x, ty: y, alpha: 1, dead: 0, chase: false });
+  }
+
+  tug = { x: start.x, y: start.y, a: Math.PI, v: 0 };
+  time = 0; woken = 0; spooks = 0; started = false; exitT = 0; slip = 0;
   const c = P(tug.x, tug.y); cam.x = c[0]; cam.y = c[1];
   renderList(); renderStats();
+}
+function addTrailer() {
+  const last = trailers[trailers.length - 1] || tug, back = (last === tug ? 17 : 15) + 26;
+  const t = { i: trailers.length, x: last.x - Math.cos(last.a) * back, y: last.y - Math.sin(last.a) * back, a: last.a, load: null, reserved: false };
+  trailers.push(t); return t;
 }
 
 function renderList() {
@@ -406,15 +554,12 @@ function renderList() {
   for (const g of fam) {
     const li = document.createElement('li'); if (g.taken) li.className = 'got';
     li.appendChild(document.createElement('i'));
-    li.appendChild(document.createTextNode(g.rel + ' ' + g.first));
+    li.appendChild(document.createTextNode(g.rel + ' ' + g.first + (g.far && !g.taken ? ' (across town)' : '')));
     ul.appendChild(li);
   }
 }
-function renderStats() {
-  const s = Math.floor(time);
-  $('time').textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
-  $('woken').textContent = woken + (woken === 1 ? ' neighbour woken' : ' neighbours woken');
-}
+const clock = () => { const s = Math.floor(time); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+function renderStats() { $('time').textContent = clock(); }
 
 /* ---------- sound ---------- */
 let ac = null, muted = false;
@@ -461,23 +606,96 @@ function inputDir() {           // desired direction on screen, magnitude 0..1
 }
 
 /* ---------- simulation ---------- */
+const bang = (x, y, s) => bangs.push({ x, y, t: 0, s });
 function wake(g) {
   if (g.awake || g.fam) return;
   g.awake = true; g.shake = .5; woken++;
-  bangs.push({ x: g.x, y: g.y, t: 0 });
-  snd(110, .18, 'square', .06, .5); renderStats();
+  bang(g.x, g.y, '!'); snd(110, .18, 'square', .06, .5);
 }
 function allAboard() { return fam.every(g => g.taken); }
+function pickUp(o) {
+  const t = trailers.find(t => !t.reserved) || addTrailer();
+  o.taken = true; t.reserved = true;
+  if (!o.dropped) { holes.push({ x: o.x, y: o.y, a: o.a, id: o.id, side: o.side }); o.flowers = false; }
+  flying.push({ g: o, t: 0, tr: t });
+  snd(520, .12, 'triangle', .09, 1.5); setTimeout(() => snd(780, .16, 'triangle', .08), 90);
+  renderList();
+  if (allAboard()) setTimeout(() => { snd(392, .12); setTimeout(() => snd(523, .12), 110); setTimeout(() => snd(659, .22), 220); }, 350);
+}
+function knockOff(t) {
+  const g = t.load; t.load = null; t.reserved = false;
+  g.taken = false; g.dropped = true; g.cool = 1.6; g.dropT = .45; g.fx = t.x; g.fy = t.y;
+  g.x = clamp(t.x - Math.sin(t.a) * 36, 30, GW - 30); g.y = clamp(t.y + Math.cos(t.a) * 36, 30, GH - 30); g.a = t.a;
+  spooks++; bang(t.x, t.y, 'BOO!'); snd(300, .5, 'sine', .09, .4); renderList();
+}
+function creatures(dt) {
+  const play = state === 'play';
+  for (const s of skels) {
+    if (s.down > 0) { s.down -= dt; continue; }
+    const n = node(s.ti, s.tj), tx = n[0] + s.ox, ty = n[1] + s.oy, dx = tx - s.x, dy = ty - s.y, d = Math.hypot(dx, dy);
+    const dT = dist(s, tug); s.wave = dT < 110;
+    if (d < 3) {
+      s.i = s.ti; s.j = s.tj;
+      const opts = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([a, b]) => [s.i + a, s.j + b]).filter(([a, b]) => a >= 0 && b >= 0 && a <= COLS && b <= ROWS);
+      [s.ti, s.tj] = pick(opts);
+    } else if (!s.wave || dT < 40) { s.x += dx / d * 26 * dt; s.y += dy / d * 26 * dt; s.ph += dt * 7; }
+    else s.ph += dt * 3;
+    if (!play) continue;
+    let hit = dT < 19;
+    if (hit) tug.v *= .4;
+    else for (const t of trailers) if (Math.abs(t.x - s.x) < 17 && dist(t, s) < 17) hit = true;
+    if (hit) { s.down = 4; bang(s.x, s.y, 'clack'); snd(900, .05, 'square', .05); setTimeout(() => snd(700, .05, 'square', .05), 60); setTimeout(() => snd(1100, .06, 'square', .04), 130); }
+  }
+  for (const g of ghosts) {
+    if (g.dead > 0) { g.dead -= dt; if (g.dead <= 0) { g.x = g.hx; g.y = g.hy; g.tx = g.x; g.ty = g.y; g.alpha = 0; } continue; }
+    g.alpha = Math.min(1, g.alpha + dt * 1.2);
+    const dT = dist(g, tug);
+    let prey = null, pd = 1e9;
+    if (play && dT < 320 && g.alpha >= 1) for (const t of trailers) if (t.load) { const d = dist(t, g); if (d < pd) { pd = d; prey = t; } }
+    if (prey && !g.chase) snd(500, .4, 'sine', .04, 1.5);
+    g.chase = !!prey;
+    let tx = g.tx, ty = g.ty, sp = 30;
+    if (prey) { tx = prey.x; ty = prey.y; sp = 84 + level * 4; }
+    else if (Math.hypot(g.tx - g.x, g.ty - g.y) < 6) { g.tx = clamp(g.hx + rnd(-260, 260), 40, GW - 40); g.ty = clamp(g.hy + rnd(-260, 260), 40, GH - 40); }
+    const dx = tx - g.x, dy = ty - g.y, d = Math.hypot(dx, dy) || 1;
+    g.x += dx / d * sp * dt; g.y += dy / d * sp * dt;
+    if (!play) continue;
+    if (dT < 22) { g.dead = 10; bang(g.x, g.y, 'poof'); snd(260, .2, 'sine', .06, 2); }
+    else if (prey && pd < 18) { knockOff(prey); g.dead = 12; }
+  }
+  for (const k of pumps) {
+    if (k.splat > 0) { k.splat -= dt; if (k.splat <= 0) { k.x = k.hx; k.y = k.hy; } continue; }
+    if (k.hopT < 1) {
+      k.hopT = Math.min(1, k.hopT + dt / .42);
+      k.x = lerp(k.sx, k.tx, k.hopT); k.y = lerp(k.sy, k.ty, k.hopT); k.z = Math.sin(Math.PI * k.hopT) * 15;
+    } else {
+      k.z = 0; k.wait -= dt;
+      if (k.wait <= 0) {
+        let a = rnd(0, 6.283);
+        const dh = Math.hypot(k.hx - k.x, k.hy - k.y), dT = dist(k, tug);
+        if (dT < 220 && Math.random() < .5) a = Math.atan2(tug.y - k.y, tug.x - k.x) + rnd(-.5, .5);
+        else if (dh > 260) a = Math.atan2(k.hy - k.y, k.hx - k.x) + rnd(-.6, .6);
+        k.sx = k.x; k.sy = k.y; k.tx = clamp(k.x + Math.cos(a) * 40, 25, GW - 25); k.ty = clamp(k.y + Math.sin(a) * 40, 25, GH - 25);
+        k.hopT = 0; k.wait = rnd(.4, 1.3);
+      }
+    }
+    if (play && k.z < 11 && dist(k, tug) < 19) {
+      k.splat = 16; k.z = 0; k.hopT = 1; tug.v *= .55; slip = 1.1; slipDir = Math.random() < .5 ? -1 : 1;
+      bang(k.x, k.y, 'splat'); snd(160, .25, 'sawtooth', .06, .4);
+    }
+  }
+}
 function update(dt) {
   if (state === 'play' || state === 'exit') {
     let [ix, iy, mag] = inputDir();
     if (state === 'exit') { const d = P(1, 0); const m = Math.hypot(d[0], d[1]); ix = d[0] / m; iy = d[1] / m; mag = 1; }
     let want = 0;
+    if (slip > 0) { slip -= dt; tug.a = wrap(tug.a + slipDir * 2.4 * dt * Math.max(slip, 0)); }
     if (mag > 0) {
       if (!started) started = true;
       const wx = (ix / A + iy / B) / 2, wy = (iy / B - ix / A) / 2;
       const diff = wrap(Math.atan2(wy, wx) - tug.a);
-      const mt = 3.3 * dt * clamp(tug.v / 50, .3, 1);
+      const mt = 3.3 * dt * clamp(tug.v / 50, .3, 1) * (slip > 0 ? .25 : 1);
       tug.a = wrap(tug.a + clamp(diff, -mt, mt));
       want = 150 * mag * (Math.abs(diff) > 1.8 ? .55 : 1);
     }
@@ -486,26 +704,18 @@ function update(dt) {
     if (started && state === 'play') time += dt;
 
     if (state === 'play') {
-      for (const o of graves) {
-        if (o.taken) continue;
-        const dx = tug.x - o.x, dy = tug.y - o.y, d = Math.hypot(dx, dy) || 1;
-        if (o.fam) {
-          if (d < 46) {
-            const t = trailers.find(t => !t.reserved);
-            o.taken = true; t.reserved = true;
-            holes.push({ x: o.x, y: o.y, a: o.a, id: o.id });
-            flying.push({ g: o, t: 0, tr: t });
-            snd(520, .12, 'triangle', .09, 1.5); setTimeout(() => snd(780, .16, 'triangle', .08), 90);
-            renderList();
-            if (allAboard()) setTimeout(() => { snd(392, .12); setTimeout(() => snd(523, .12), 110); setTimeout(() => snd(659, .22), 220); }, 350);
-          }
-          continue;
-        }
-        if (d < 28) { tug.x = o.x + dx / d * 28; tug.y = o.y + dy / d * 28; tug.v *= .86; wake(o); }
+      for (const o of fam) {
+        if (o.cool > 0) o.cool -= dt;
+        if (!o.taken && !(o.cool > 0) && dist(o, tug) < 58) pickUp(o);
       }
-      for (const o of trees) {
-        const dx = tug.x - o.x, dy = tug.y - o.y, d = Math.hypot(dx, dy) || 1;
-        if (d < 20) { tug.x = o.x + dx / d * 20; tug.y = o.y + dy / d * 20; tug.v *= .86; }
+      near(tug.x, tug.y, o => {
+        if (o.taken) return;
+        const dx = tug.x - o.x, dy = tug.y - o.y, d = Math.hypot(dx, dy) || 1, r = o.r + 13;
+        if (d < r) { tug.x = o.x + dx / d * r; tug.y = o.y + dy / d * r; tug.v *= .86; if (o.kind) wake(o); }
+      });
+      for (const m of maus) {
+        const dx = tug.x - m.x, dy = tug.y - m.y, px = m.hw + 13 - Math.abs(dx), py = m.hh + 13 - Math.abs(dy);
+        if (px > 0 && py > 0) { if (px < py) tug.x += Math.sign(dx || 1) * px; else tug.y += Math.sign(dy || 1) * py; tug.v *= .86; }
       }
       const m = 20, open = allAboard();
       tug.y = clamp(tug.y, m, GH - m); tug.x = Math.max(tug.x, m);
@@ -521,7 +731,7 @@ function update(dt) {
       let vx = t.x - hx, vy = t.y - hy; const d = Math.hypot(vx, vy) || 1; vx /= d; vy /= d;
       t.x = hx + vx * 26; t.y = hy + vy * 26; t.a = Math.atan2(-vy, -vx);
       t.hx = hx; t.hy = hy;
-      if (state === 'play') for (const o of graves) if (!o.taken && !o.fam && !o.awake && Math.abs(o.x - t.x) < 24 && Math.hypot(o.x - t.x, o.y - t.y) < 22) wake(o);
+      if (state === 'play') near(t.x, t.y, o => { if (o.kind && !o.awake && !o.taken && Math.hypot(o.x - t.x, o.y - t.y) < 22) wake(o); });
       lead = t; rear = 15;
     }
     for (const f of flying) { f.t += dt / .55; if (f.t >= 1) { f.tr.load = f.g; snd(180, .08, 'sine', .08); } }
@@ -529,20 +739,22 @@ function update(dt) {
 
     if (state === 'exit') {
       exitT += dt;
-      if (exitT > 2.4) win();
+      if (exitT > 2.6) win();
     } else {
       const c = P(tug.x + Math.cos(tug.a) * tug.v * .25, tug.y + Math.sin(tug.a) * tug.v * .25);
       const k = 1 - Math.exp(-dt * 4);
       cam.x = lerp(cam.x, c[0], k); cam.y = lerp(cam.y, c[1], k);
     }
   }
+  creatures(dt);
   for (const g of graves) if (g.shake > 0) g.shake -= dt;
+  for (const g of fam) if (g.dropT > 0) g.dropT -= dt;
   for (const b of bangs) b.t += dt;
   bangs = bangs.filter(b => b.t < 1);
 }
 
 /* ---------- drawing ---------- */
-let vx0, vy0, vx1, vy1;
+let vx0, vy0, vx1, vy1, mapTop = 70, mapRight = 16;
 const onScreen = (p, m) => p[0] > vx0 - m && p[0] < vx1 + m && p[1] > vy0 - m && p[1] < vy1 + m;
 function label(text, p, alpha, size, col) {
   ctx.globalAlpha = alpha;
@@ -550,6 +762,18 @@ function label(text, p, alpha, size, col) {
   ctx.textAlign = 'center'; ctx.lineWidth = 3; ctx.strokeStyle = C.paper; ctx.strokeText(text, p[0], p[1]);
   ctx.fillStyle = col || C.ink; ctx.fillText(text, p[0], p[1]);
   ctx.globalAlpha = 1;
+}
+function drawMap() {
+  const mw = Math.min(150, VW * .34), s = mw / ((GW + GH) * A), x0 = VW - mapRight - mw, y0 = mapTop + 4;
+  const M = (x, y) => { const p = P(x, y); return [x0 + (p[0] + GH * A) * s, y0 + p[1] * s]; };
+  const quad = (x, y, w, h) => { const a = M(x, y), b = M(x + w, y), c = M(x + w, y + h), d = M(x, y + h); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.lineTo(c[0], c[1]); ctx.lineTo(d[0], d[1]); ctx.closePath(); };
+  ctx.beginPath(); quad(0, 0, GW, GH); ctx.globalAlpha = .88; ctx.fillStyle = C.paper; ctx.fill(); ctx.globalAlpha = 1;
+  ctx.lineWidth = 1.4; ctx.strokeStyle = C.ink; ctx.stroke();
+  ctx.beginPath(); for (const b of blocks) quad(b.x, b.y, BW, BH); ctx.fillStyle = C.grid; ctx.fill();
+  const g = M(GW, gateY); ctx.fillStyle = C.ink; ctx.fillRect(g[0] - 2.5, g[1] - 2.5, 5, 5);
+  for (const f of fam) if (!f.taken) { const p = M(f.x, f.y); ctx.beginPath(); ctx.arc(p[0], p[1], 3.2, 0, 7); ctx.fillStyle = C.marigold; ctx.fill(); ctx.lineWidth = 1.2; ctx.stroke(); }
+  const t = M(tug.x, tug.y);
+  ctx.beginPath(); ctx.arc(t[0], t[1], 3.4, 0, 7); ctx.fillStyle = C.ink; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = C.paper; ctx.stroke();
 }
 function draw(now) {
   if (!still) boil = Math.floor(now / 170);
@@ -566,6 +790,14 @@ function draw(now) {
   ctx.lineJoin = ctx.lineCap = 'round';
   vx0 = cam.x - VW / 2 / scale; vx1 = cam.x + VW / 2 / scale; vy0 = cam.y - VH / 2 / scale; vy1 = cam.y + VH / 2 / scale;
 
+  // kerbs around every block
+  for (const b of blocks) {
+    if (!onScreen(P(b.mx, b.my), 340)) continue;
+    seed(b.id * 11);
+    const k = corners(b.mx, b.my, 0, BW + 6, BH + 6).map(c => P(c[0], c[1]));
+    shape(k, null, 1.3);
+    if (b.type === 'plaza') { ctx.setLineDash([4, 5]); shape(corners(b.mx, b.my, 0, BW - 50, BH - 50).map(c => P(c[0], c[1])), null, 1); ctx.setLineDash([]); }
+  }
   for (const d of decor) {
     const p = P(d.x, d.y); if (!onScreen(p, 10)) continue;
     seed(d.id * 5 + 40000);
@@ -576,18 +808,23 @@ function draw(now) {
     const p = P(h.x, h.y); if (!onScreen(p, 40)) continue;
     seed(h.id * 7 + 2);
     shape(corners(h.x + Math.cos(h.a) * 2, h.y + Math.sin(h.a) * 2, h.a, 30, 19).map(c => P(c[0], c[1])), C.shade, 2);
+    flowers(h);
   }
+  for (const k of pumps) if (k.splat > 0 && onScreen(P(k.x, k.y), 30)) drawPumpkin(k);
   fence(0, 0, GW, 0, 50000); fence(0, 0, 0, GH, 51000);
 
   // everything standing up, back to front
-  const items = [];
-  for (const g of graves) if (!g.taken) { const p = P(g.x, g.y); if (onScreen(p, 50)) items.push([g.x + g.y, 0, g]); }
-  for (const t of trees) { const p = P(t.x, t.y); if (onScreen(p, 80)) items.push([t.x + t.y, 1, t]); }
+  const items = [], put = (list, type, m) => { for (const o of list) if (onScreen(P(o.x, o.y), m)) items.push([o.x + o.y, type, o]); };
+  for (const g of graves) if (!g.taken && onScreen(P(g.x, g.y), 50)) items.push([g.x + g.y, 0, g]);
+  put(trees, 1, 80); put(maus, 9, 140); put(lamps, 10, 50); put(statues, 11, 90); put(patchP, 12, 20);
+  for (const s of skels) if (onScreen(P(s.x, s.y), 40)) items.push([s.x + s.y, 6, s]);
+  for (const g of ghosts) if (!(g.dead > 0) && onScreen(P(g.x, g.y), 40)) items.push([g.x + g.y + 6, 7, g]);
+  for (const k of pumps) if (!(k.splat > 0) && onScreen(P(k.x, k.y), 40)) items.push([k.x + k.y, 8, k]);
   items.push([tug.x + tug.y, 2, tug]);
   for (const t of trailers) {
     items.push([t.x + t.y, 3, t]);
     const fxp = [t.x + Math.cos(t.a) * 15, t.y + Math.sin(t.a) * 15];
-    items.push([(t.hx + t.hy + fxp[0] + fxp[1]) / 2 - 4, 4, [[t.hx, t.hy], fxp, 9500 + t.i]]);
+    if (t.hx !== undefined) items.push([(t.hx + t.hy + fxp[0] + fxp[1]) / 2 - 4, 4, [[t.hx, t.hy], fxp, 9500 + t.i]]);
   }
   for (const f of flying) {
     const e = f.t * f.t * (3 - 2 * f.t);
@@ -606,15 +843,28 @@ function draw(now) {
   };
   const drawItem = it => {
     const o = it[2];
-    if (it[1] === 0) {
-      const sh = o.shake > 0 ? Math.sin(o.shake * 60) * 1.6 : 0;
-      drawGrave(o, o.x + sh, o.y - sh, 0, o.a, o.awake ? 'grumpy' : 'sleep');
-      if (o.flowers) flowers(o);
-    } else if (it[1] === 1) drawTree(o);
-    else if (it[1] === 2) drawTug(o);
-    else if (it[1] === 3) drawTrailer(o);
-    else if (it[1] === 4) drawBar(o[0], o[1], o[2]);
-    else drawGrave(o.g, o.x, o.y, o.z, o.a, 'happy');
+    switch (it[1]) {
+      case 0: {
+        const sh = o.shake > 0 ? Math.sin(o.shake * 60) * 1.6 : 0;
+        let x = o.x + sh, y = o.y - sh, z = 0;
+        if (o.dropT > 0) { const e = o.dropT / .45; x = lerp(o.x, o.fx, e); y = lerp(o.y, o.fy, e); z = 10.5 * e + Math.sin(Math.PI * e) * 22; }
+        drawGrave(o, x, y, z, o.a, o.awake || o.dropped ? 'grumpy' : 'sleep');
+        if (o.flowers) flowers(o);
+        break;
+      }
+      case 1: drawTree(o); break;
+      case 2: drawTug(o); break;
+      case 3: drawTrailer(o); break;
+      case 4: drawBar(o[0], o[1], o[2]); break;
+      case 5: drawGrave(o.g, o.x, o.y, o.z, o.a, 'happy'); break;
+      case 6: drawSkeleton(o); break;
+      case 7: drawGhost(o, now); break;
+      case 8: drawPumpkin(o); break;
+      case 9: drawMaus(o); break;
+      case 10: drawLamp(o); break;
+      case 11: drawStatue(o); break;
+      case 12: seed(o.id * 43); pumpkinBody(P(o.x, o.y), o.r, false); break;
+    }
   };
   const inside = it => (it[1] === 4 ? Math.max(it[2][0][0], it[2][1][0]) : it[2].x) <= GW + 4;
   for (const it of items) if (inside(it)) drawItem(it);
@@ -622,22 +872,24 @@ function draw(now) {
   for (const it of items) if (!inside(it)) drawItem(it);
 
   // name tags near the tug
-  if (state === 'play') for (const g of graves) {
-    if (g.taken) continue;
-    const d = Math.hypot(g.x - tug.x, g.y - tug.y); if (d > 135) continue;
-    label(g.name, P(g.x - Math.cos(g.a) * 8, g.y - Math.sin(g.a) * 8, 34), clamp((135 - d) / 40, 0, 1));
+  if (state === 'play') for (const g of tagged) {
+    if (g.taken || !(g.flowers || g.dropped)) continue;
+    const d = dist(g, tug); if (d > 170) continue;
+    label(g.name, P(g.x - Math.cos(g.a) * 8, g.y - Math.sin(g.a) * 8, 34), clamp((170 - d) / 40, 0, 1));
   }
   for (const b of bangs) {
     const p = P(b.x, b.y, 40 + b.t * 14);
-    ctx.font = '18px "Permanent Marker", "Marker Felt", cursive'; ctx.textAlign = 'center';
-    ctx.globalAlpha = 1 - b.t; ctx.lineWidth = 3; ctx.strokeStyle = C.paper; ctx.strokeText('!', p[0], p[1]);
-    ctx.fillStyle = C.ink; ctx.fillText('!', p[0], p[1]); ctx.globalAlpha = 1;
+    ctx.font = (b.s === '!' ? 18 : 13) + 'px "Permanent Marker", "Marker Felt", cursive'; ctx.textAlign = 'center';
+    ctx.globalAlpha = 1 - b.t; ctx.lineWidth = 3; ctx.strokeStyle = C.paper; ctx.strokeText(b.s, p[0], p[1]);
+    ctx.fillStyle = C.ink; ctx.fillText(b.s, p[0], p[1]); ctx.globalAlpha = 1;
   }
-  if (open && state === 'play') {
+  if (state === 'play') {
     const bob = still ? 0 : Math.sin(now / 250) * 2;
-    label('EXIT', P(GW, gateY, 44 + bob), 1, 13);
-    const tp = P(tug.x, tug.y, 12), gp = P(GW + 20, gateY, 12), dx = gp[0] - tp[0], dy = gp[1] - tp[1], d = Math.hypot(dx, dy);
-    if (d > 110) {
+    let target = null;
+    if (open) { label('EXIT', P(GW, gateY, 44 + bob), 1, 13); target = { x: GW + 20, y: gateY }; }
+    else { let bd = 1e9; for (const f of fam) if (!f.taken) { const d = dist(f, tug); if (d < bd) { bd = d; target = f; } } }
+    const tp = P(tug.x, tug.y, 12), gp = P(target.x, target.y, 12), dx = gp[0] - tp[0], dy = gp[1] - tp[1], d = Math.hypot(dx, dy);
+    if (d > 130) {
       const ux = dx / d, uy = dy / d, bx = tp[0] + ux * (52 + bob), by = tp[1] + uy * (52 + bob);
       seed(60000);
       line([[bx - ux * 16, by - uy * 16], [bx, by]], 3);
@@ -645,8 +897,9 @@ function draw(now) {
     }
   }
 
-  // steering thumb
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  if (state === 'play' || state === 'exit') drawMap();
+  // steering thumb
   if (stick.on && state === 'play') {
     ctx.beginPath(); ctx.arc(stick.ox, stick.oy, 45, 0, 7); ctx.lineWidth = 1.5; ctx.strokeStyle = C.ink;
     ctx.setLineDash([5, 6]); ctx.stroke(); ctx.setLineDash([]);
@@ -664,11 +917,9 @@ function start() {
 }
 function win() {
   state = 'won'; stick.on = false;
-  const s = Math.floor(time);
-  $('winLine').textContent = 'The ' + surname + ' family is on the road: ' + fam.length + ' aboard in ' + Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') + '.';
-  $('winVerdict').textContent = woken === 0 ? 'Not a single neighbour woke up. Silent as the grave.'
-    : woken < 4 ? woken + (woken === 1 ? ' neighbour was' : ' neighbours were') + ' woken. They will get over it. Eventually.'
-    : woken + ' neighbours were woken. Expect a strongly worded haunting.';
+  $('winLine').textContent = 'The ' + surname + ' family is on the road. All ' + fam.length + ' aboard in ' + clock() + '.';
+  $('winVerdict').textContent = (spooks === 0 ? 'No ghost laid a finger on them.' : spooks === 1 ? 'A ghost spooked one of them off the cart once.' : 'Ghosts spooked them off the cart ' + spooks + ' times.')
+    + ' ' + (woken === 0 ? 'Not one neighbour woke up.' : woken === 1 ? 'One neighbour was woken.' : woken + ' neighbours were woken.');
   $('winSheet').hidden = false; $('nextBtn').focus();
   snd(523, .14); setTimeout(() => snd(659, .14), 130); setTimeout(() => snd(784, .3), 260);
 }
@@ -680,13 +931,20 @@ build();
 let last = performance.now(), tick = 0;
 function frame(now) {
   const dt = Math.min((now - last) / 1000, .05); last = now;
-  if (++tick % 45 === 0) { readColors(); if (state === 'play') renderStats(); }
+  if (++tick % 30 === 0) {
+    readColors(); if (state === 'play') renderStats();
+    const r = $('stats').getBoundingClientRect(); if (r.width) { mapTop = r.bottom; mapRight = Math.max(8, VW - r.right); }
+  }
   if (cv.clientWidth !== VW || cv.clientHeight !== VH) resize();
   update(dt); draw(now);
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
-window.__ft = { get tug() { return tug; }, get fam() { return fam; }, get state() { return state; }, get gate() { return [GW, gateY]; } };
+window.__ft = {
+  get tug() { return tug; }, get fam() { return fam; }, get state() { return state; }, get gate() { return [GW, gateY]; },
+  get trailers() { return trailers; }, get ghosts() { return ghosts; }, get skels() { return skels; }, get pumps() { return pumps; },
+  get stats() { return { woken, spooks, time }; }
+};
 })();
 </script>
 </body>
